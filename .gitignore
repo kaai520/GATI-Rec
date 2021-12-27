@@ -1,0 +1,7 @@
+**/__pycache__
+log/
+*.png
+*.pdf
+test.py
+raw_data/ml_1m
+raw_data/ml_100k
