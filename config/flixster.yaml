@@ -9,20 +9,22 @@ test_num_workers: 8
 dataset_root: raw_data
 dataset: flixster
 max_neighbors: 200
+max_hops: 2
 cluster_sample: True
 input_embedding: True
 input_channels: 4
 edge_classes: 10
-heads: 2
+heads: 4
 layers: 4
+edge_embedding: normal
 attention: True
 edge_feature: True
 is_cuda: True
 gpu_ids: [0]
-seed: 2021
+seed: 42
 loss_mode: mse
 optim_mode: Adam #Adam
 lr_mode: poly #multistep
 lr_step: 40
 multistep_epochs: [20,20,20]
-log_prefix: EGAT-elu-concat-self_feature-cumsum_embedding-mlp
+log_prefix: normal

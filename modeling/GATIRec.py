@@ -130,7 +130,7 @@ class Encoder(nn.Module):
     def __init__(self, input_channels=4, heads=2, output_channels=32, layers=4, edge_classes=5,
                  activation='elu', concat_nodes_feature=False, edge_embedding='normal', add_self_feature=False,
                  input_embedding=True, attention=True, edge_feature=True, use_feature=False, context_dim=None,
-                 item_num_embeddings=None, user_num_embeddings=None):
+                 item_num_embeddings=None, user_num_embeddings=None, h=1):
         super(Encoder, self).__init__()
         messagePassingLayers = nn.ModuleList()
         if attention:
@@ -159,7 +159,7 @@ class Encoder(nn.Module):
         self.layers_num = layers
         self.layers = messagePassingLayers
         self.concat_nodes_feature = concat_nodes_feature
-        self.input_embedding = nn.Embedding(edge_classes, input_channels) if input_embedding else None
+        self.input_embedding = nn.Embedding(2*h+2, input_channels) if input_embedding else None
 
     def forward(self, data):
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
@@ -192,7 +192,7 @@ class GATIRec(nn.Module):
                  multiply_by=1, activation='elu', decoder_choice='mf', concat_nodes_feature=False,
                  edge_embedding='normal', add_self_feature=False, input_embedding=False,
                  attention=True, edge_feature=True, use_feature=False, context_dim=None,
-                 item_num_embeddings=None, user_num_embeddings=None):
+                 item_num_embeddings=None, user_num_embeddings=None, h=1):
         super(GATIRec, self).__init__()
         self.multiply_by = multiply_by
         assert decoder_choice in ['mf', 'mlp', 'ncf', 'semlp']
@@ -215,10 +215,10 @@ class GATIRec(nn.Module):
         self.item_num_embeddings = item_num_embeddings
         self.user_num_embeddings = user_num_embeddings
         # Just for side information #
-        self.encoder = self.__init_encoder()
+        self.encoder = self.__init_encoder(h=h)
         self.decoder = self.__init_decoder()
 
-    def __init_encoder(self):
+    def __init_encoder(self, h=1):
         encoder = Encoder(input_channels=self.input_channels, heads=self.EGAT_heads,
                           output_channels=self.EGAT_output_channels, layers=self.EGAT_layers,
                           edge_classes=self.edge_classes, activation=self.activation,
@@ -226,7 +226,7 @@ class GATIRec(nn.Module):
                           add_self_feature=self.add_self_feature, input_embedding=self.input_embedding,
                           attention=self.attention, edge_feature=self.edge_feature, use_feature=self.use_feature,
                           context_dim=self.context_dim, item_num_embeddings=self.item_num_embeddings,
-                          user_num_embeddings=self.user_num_embeddings)
+                          user_num_embeddings=self.user_num_embeddings, h=h)
         return encoder
 
     def __init_decoder(self):

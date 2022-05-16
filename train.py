@@ -2,7 +2,7 @@ import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
 import torch
-torch.multiprocessing.set_sharing_strategy('file_system')
+# torch.multiprocessing.set_sharing_strategy('file_system')
 import random
 import numpy as np
 from tqdm import tqdm
@@ -27,11 +27,12 @@ from utils.loss import MCLosses
 
 
 def setup_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.backends.cudnn.deterministic = True
+    if seed != 'None':
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.backends.cudnn.deterministic = True
 
 
 class Trainer(object):
@@ -43,11 +44,11 @@ class Trainer(object):
         self.saver = torch_saver(os.path.join(self.log_dir, 'checkpoint')) #checkpoint saver
         self.device = 'cpu'
         self.cuda = self._init_gpu() # if cuda, device:'cpu'->'cuda'
-        self._fix_seed()
-
+        
         self.criterion = MCLosses().build_loss(self.config['loss_mode'])
         self.train_loader = self._get_dataloader('train')
         self.val_loader = self._get_dataloader('test')
+        self._fix_seed()
         self.model = self._init_model()
         self.optimizer = self._init_optimizer()
         self.evaluator = Evaluator()
@@ -78,7 +79,9 @@ class Trainer(object):
             self.train_loss.update(loss.item())
             tbar.set_description('[%d]Train loss: %.5f' % (epoch, self.train_loss.avg))
             self.writer.add_scalar('train/total_loss_iter', loss.item(), i + num_sample_tr * epoch)
-        torch.cuda.empty_cache()
+        #     if i%10 == 0:
+        #         torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         self.writer.add_scalar('train/total_loss_epoch', self.train_loss.sum, epoch)
         self.writer.add_scalar('train/lr_epoch', self.optimizer.param_groups[0]['lr'], epoch)
         log_string = '[Epoch: %d, numSamples: %d] lr: %.6f Train total loss: %.4f' \
@@ -106,7 +109,7 @@ class Trainer(object):
                 self.val_loss.update(loss.item())
                 tbar.set_description('[%d]Val loss: %.5f' % (epoch, self.val_loss.avg))
                 self.evaluator.add_batch(preds.cpu().numpy(), data_y.cpu().numpy())
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             rmse = self.evaluator.rmse()
             self.writer.add_scalar('val/total_loss_epoch', self.val_loss.sum, epoch)
             self.writer.add_scalar('val/rmse', rmse, epoch)
@@ -188,16 +191,21 @@ class Trainer(object):
         context_dim = None
         item_num_embeddings = None
         user_num_embeddings = None
+        edge_embedding = 'cumsum' if self.config['edge_embedding'] is None else self.config['edge_embedding']
         if use_feature:
             context_dim = self.config['context_dim']
             item_num_embeddings = self.config['item_num_embeddings']
             user_num_embeddings = self.config['user_num_embeddings']
         model = GATIRec(input_channels=input_channels, EGAT_heads=heads, EGAT_output_channels=32, EGAT_layers=layers,
                         edge_classes=edge_classes, multiply_by=1, activation='elu', decoder_choice='mlp',
-                        concat_nodes_feature=True, edge_embedding='cumsum', add_self_feature=True,
+                        concat_nodes_feature=True, edge_embedding=edge_embedding, add_self_feature=True,
                         input_embedding=input_embedding, attention=attention, edge_feature=edge_feature,
                         use_feature=use_feature, context_dim=context_dim, item_num_embeddings=item_num_embeddings,
-                        user_num_embeddings=user_num_embeddings)
+                        user_num_embeddings=user_num_embeddings, h=self.config['max_hops'])
+        if self.config['dataset'] == 'yahoo_music':
+            model.set_multiply_by(0.05)
+        if self.config['dataset'] == 'flixster':
+            model.set_multiply_by(0.5)
         if self.cuda:
             device_ids = [i for i in range(len(self.config['gpu_ids']))]
             if len(device_ids) > 1:
@@ -228,18 +236,18 @@ class Trainer(object):
         cluster_sample = True if self.config['cluster_sample'] is None else self.config['cluster_sample']
         if self.config['dataset'] == 'flixster':
             dataset = Flixster(root=self.config['dataset_root'],
-                               max_neighbors=self.config['max_neighbors'], split=split, one_hot_flag=one_hot_flag,
+                               max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'], split=split, one_hot_flag=one_hot_flag,
                                cluster_sample=cluster_sample)
         elif self.config['dataset'] == 'douban':
-            dataset = Douban(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'],
+            dataset = Douban(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
                              split=split, one_hot_flag=one_hot_flag, cluster_sample=cluster_sample)
         elif self.config['dataset'] == 'yahoo_music':
-            dataset = YahooMusic(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'],
+            dataset = YahooMusic(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
                                  split=split, one_hot_flag=one_hot_flag, cluster_sample=cluster_sample)
         else:
             use_feature = False if self.config['use_feature'] is None else self.config['use_feature']
             dataset = DynamicMovieLens(root=self.config['dataset_root'], dataset=self.config['dataset'],
-                                       max_neighbors=self.config['max_neighbors'],
+                                       max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
                                        split=split, one_hot_flag=one_hot_flag, use_feature=use_feature,
                                        cluster_sample=cluster_sample)
 
@@ -248,7 +256,7 @@ class Trainer(object):
                                         num_workers=num_workers, pin_memory=False)
         else:
             dataloader = DataLoader(dataset, batch_size=self.config['batch_size'], shuffle=shuffle,
-                                    num_workers=num_workers, pin_memory=self.cuda)
+                                num_workers=num_workers, pin_memory=False)
         return dataloader
 
     def _get_lr_scheduler(self):

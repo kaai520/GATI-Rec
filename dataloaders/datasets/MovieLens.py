@@ -97,7 +97,7 @@ if __name__ == '__main__':
     from torch_geometric.data import DataListLoader, DataLoader
     from tqdm import tqdm
 
-    dataset = DynamicMovieLens('../../raw_data', 'ml_1m', max_neighbors=200, split='train', use_feature=False)
+    dataset = DynamicMovieLens('../../raw_data', 'ml_100k', max_neighbors=200, split='train', use_feature=False, h=2)
     # print(dataset.ratings)
     train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
     max_num = 0

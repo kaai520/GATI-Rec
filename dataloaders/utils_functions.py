@@ -23,9 +23,8 @@ def random_sample_neighbors(fringe, mx, max_neighbors, is_test=False, csr=True):
     data = all_neighbors.data
     num_neighbors = len(data)
     if num_neighbors > max_neighbors:
-        if is_test:
-            np.random.seed(2021)
-        select_indices = np.random.choice(indices, max_neighbors, replace=False)
+        random_state = np.random.RandomState(42)
+        select_indices = random_state.choice(indices, max_neighbors, replace=False) if is_test else np.random.choice(indices, max_neighbors, replace=False)
         return set(select_indices)
     else:
         return set(indices)
@@ -43,12 +42,11 @@ def cluster_sample_neighbors(fringe, mx, max_neighbors, is_test=False, csr=True)
         p = max_neighbors/num_neighbors
         data_types = np.unique(data)
         result = []
-        if is_test:
-            np.random.seed(2021)
+        rs = np.random.RandomState(42)
         for data_type in data_types:
             cluster_indices = np.nonzero(data==data_type)[0]
             sampling_num = ceil(len(cluster_indices)*p)
-            select_samples = np.random.choice(cluster_indices, sampling_num, replace=False)
+            select_samples = rs.choice(cluster_indices, sampling_num, replace=False) if is_test else np.random.choice(cluster_indices, sampling_num, replace=False)
             result.append(select_samples)
         samples = np.concatenate(result)
         return set(indices[samples])
@@ -73,7 +71,8 @@ def subgraph_extraction_labeling(ind, csr_matrix, csc_matrix, max_neighbors, h=1
                 v_fringe, u_fringe = random_sample_neighbors(u_fringe, csr_matrix, max_neighbors, is_test=is_test), \
                                      random_sample_neighbors(v_fringe, csc_matrix, max_neighbors, csr=False, is_test=is_test)
         else:
-            v_fringe, u_fringe = neighbors(u_fringe, csr_matrix), neighbors(v_fringe, csc_matrix, csr=False)
+            v_fringe, u_fringe = random_sample_neighbors(u_fringe, csr_matrix, max_neighbors, is_test=is_test), \
+                                random_sample_neighbors(v_fringe, csc_matrix, max_neighbors, csr=False, is_test=is_test)
         u_fringe -= u_visited
         v_fringe -= v_visited
         u_visited = u_visited.union(u_fringe)
