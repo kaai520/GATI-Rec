@@ -79,8 +79,8 @@ class Trainer(object):
             self.train_loss.update(loss.item())
             tbar.set_description('[%d]Train loss: %.5f' % (epoch, self.train_loss.avg))
             self.writer.add_scalar('train/total_loss_iter', loss.item(), i + num_sample_tr * epoch)
-        #     if i%10 == 0:
-        #         torch.cuda.empty_cache()
+            # if i%10 == 0:
+            #     torch.cuda.empty_cache()
         # torch.cuda.empty_cache()
         self.writer.add_scalar('train/total_loss_epoch', self.train_loss.sum, epoch)
         self.writer.add_scalar('train/lr_epoch', self.optimizer.param_groups[0]['lr'], epoch)
@@ -202,10 +202,10 @@ class Trainer(object):
                         input_embedding=input_embedding, attention=attention, edge_feature=edge_feature,
                         use_feature=use_feature, context_dim=context_dim, item_num_embeddings=item_num_embeddings,
                         user_num_embeddings=user_num_embeddings, h=self.config['max_hops'])
-        if self.config['dataset'] == 'yahoo_music':
-            model.set_multiply_by(0.05)
-        if self.config['dataset'] == 'flixster':
-            model.set_multiply_by(0.5)
+        # if self.config['dataset'] == 'yahoo_music':
+        #     model.set_multiply_by(0.05)
+        # if self.config['dataset'] == 'flixster':
+        #     model.set_multiply_by(0.5)
         if self.cuda:
             device_ids = [i for i in range(len(self.config['gpu_ids']))]
             if len(device_ids) > 1:
@@ -235,15 +235,18 @@ class Trainer(object):
         one_hot_flag = not self.config['input_embedding']
         cluster_sample = True if self.config['cluster_sample'] is None else self.config['cluster_sample']
         if self.config['dataset'] == 'flixster':
+            use_feature = False if self.config['use_feature'] is None else self.config['use_feature']
             dataset = Flixster(root=self.config['dataset_root'],
                                max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'], split=split, one_hot_flag=one_hot_flag,
-                               cluster_sample=cluster_sample)
+                               cluster_sample=cluster_sample, use_feature=use_feature)
         elif self.config['dataset'] == 'douban':
+            use_feature = False if self.config['use_feature'] is None else self.config['use_feature']
             dataset = Douban(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
-                             split=split, one_hot_flag=one_hot_flag, cluster_sample=cluster_sample)
+                             split=split, one_hot_flag=one_hot_flag, cluster_sample=cluster_sample, use_feature=use_feature)
         elif self.config['dataset'] == 'yahoo_music':
+            use_feature = False if self.config['use_feature'] is None else self.config['use_feature']
             dataset = YahooMusic(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
-                                 split=split, one_hot_flag=one_hot_flag, cluster_sample=cluster_sample)
+                                 split=split, one_hot_flag=one_hot_flag, cluster_sample=cluster_sample, use_feature=use_feature)
         else:
             use_feature = False if self.config['use_feature'] is None else self.config['use_feature']
             dataset = DynamicMovieLens(root=self.config['dataset_root'], dataset=self.config['dataset'],

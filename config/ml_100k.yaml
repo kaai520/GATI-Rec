@@ -17,7 +17,7 @@ edge_classes: 5
 heads: 4
 layers: 4
 edge_embedding: cumsum
-attention: False
+attention: True
 edge_feature: True
 # Just for side information #
 use_feature: False
@@ -26,11 +26,11 @@ item_num_embeddings: 19
 user_num_embeddings: [6, 2, 21]
 # Just for side information #
 is_cuda: True
-gpu_ids: [0]
+gpu_ids: [0,1]
 seed: 42
 loss_mode: mse
 optim_mode: Adam #Adam
 lr_mode: poly #multistep
 lr_step: 40
 multistep_epochs: [20,20,20]
-log_prefix: E-MA
+log_prefix: best

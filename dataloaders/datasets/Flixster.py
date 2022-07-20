@@ -1,3 +1,4 @@
+from matplotlib.patches import FancyArrow
 import torch
 from torch_geometric.data import Data, Dataset
 from dataloaders.preprocessing import load_data_monti
@@ -7,7 +8,7 @@ import numpy as np
 
 class Flixster(Dataset):
     def __init__(self, root, split='train', max_neighbors=200, h=1, one_hot_flag=True, transfer=False,
-                 cluster_sample=True):
+                 cluster_sample=True, use_feature=False):
         super(Flixster, self).__init__(root)
         self.dataset = 'flixster'
         self.h = h
@@ -16,6 +17,9 @@ class Flixster(Dataset):
         self.rating_map = {x: int(x*2) for x in np.arange(0.5, 5.01, 0.5)} if not transfer \
             else {x: int(round(x+0.01)) for x in np.arange(0.5, 5.01, 0.5)}
         self.split = split
+        self.users_f = None
+        self.items_f = None
+        self.use_feature = use_feature
         self.adj_train_csr, self.u_nodes, self.v_nodes, self.ratings = self.__data_init()
         self.adj_train_csc = self.adj_train_csr.tocsc()
         self.one_hot_flag = one_hot_flag
@@ -26,7 +30,10 @@ class Flixster(Dataset):
         return self.ratings.shape[0]
 
     def __data_init(self):
-        adj_train_csr, train_df, test_df = load_data_monti(self.root, self.dataset, self.rating_map)
+        if self.use_feature:
+            adj_train_csr, train_df, test_df, self.users_f, self.items_f =  load_data_monti(self.root, self.dataset, self.rating_map, use_feature=True)
+        else:
+            adj_train_csr, train_df, test_df = load_data_monti(self.root, self.dataset, self.rating_map)
         if self.split == 'train':
             data_df = train_df
         elif self.split == 'test':
@@ -38,7 +45,7 @@ class Flixster(Dataset):
         ratings = data_df['ratings']
         return adj_train_csr, u_nodes, v_nodes, ratings
 
-    def construct_pyg_graph(self, u, v, r, node_labels, y):
+    def construct_pyg_graph(self, u, v, r, node_labels, y, u_nodes, v_nodes):
         u, v = torch.LongTensor(u), torch.LongTensor(v)
         r = torch.LongTensor(r)-1  # 1~10->0~9
         edge_index = torch.stack([torch.cat([u, v]), torch.cat([v, u])], 0)
@@ -48,7 +55,15 @@ class Flixster(Dataset):
         else:
             x = torch.LongTensor(node_labels)
         y = torch.FloatTensor([y])
-        data = Data(x, edge_index, edge_attr=edge_attr, y=y)
+        if self.use_feature:
+            u_f = self.users_f[u_nodes, :]
+            v_f = self.items_f[v_nodes, :]
+            u_features = torch.FloatTensor(u_f)
+            v_features = torch.FloatTensor(v_f)
+            data = Data(x, edge_index, edge_attr=edge_attr, y=y, u_features=u_features, v_features=v_features,
+                        u_num=torch.LongTensor([len(u_nodes)]), v_num=torch.LongTensor([len(v_nodes)]))
+        else:
+            data = Data(x, edge_index, edge_attr=edge_attr, y=y)
         return data
 
     def get(self, idx):
@@ -58,7 +73,7 @@ class Flixster(Dataset):
                                                                               one_hot_flag=self.one_hot_flag,
                                                                               is_test=self.is_test,
                                                                               cluster_sample=self.cluster_sample)
-        return self.construct_pyg_graph(u, v, r, node_labels, self.ratings[idx])
+        return self.construct_pyg_graph(u, v, r, node_labels, self.ratings[idx], u_nodes, v_nodes)
 
 
 if __name__ == '__main__':

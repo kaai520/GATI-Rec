@@ -121,16 +121,17 @@ def load_official_trainvaltest_split(root, dataset, rating_map, use_feature=Fals
     return rating_mx_train, data_train, data_test
 
 
-def load_data_monti(root, dataset, rating_map):
+def load_data_monti(root, dataset, rating_map, use_feature=False):
     data_dir = os.path.join(root, dataset, 'training_test_dataset.mat')
     db = h5py.File(data_dir, 'r')
     # Transpose in case is a dense matrix because of the row- vs column- major ordering between python and matlab
     M = np.asarray(db['M']).astype(np.float32).T
     train_M = np.asarray(db['Otraining']).astype(np.float32).T
     test_M = np.asarray(db['Otest']).astype(np.float32).T
-    db.close()
+    
     num_users = M.shape[0]
     num_items = M.shape[1]
+    
 
     train_idx = np.where(train_M)
     test_idx = np.where(test_M)
@@ -142,7 +143,22 @@ def load_data_monti(root, dataset, rating_map):
     data_train['rating_categories'] = data_train['ratings'].map(rating_map)
     rating_mx_train = sp.csr_matrix((data_train['rating_categories'], [data_train['u_nodes'], data_train['v_nodes']]),
                                     shape=(num_users, num_items))
-
+    if use_feature:
+        if dataset == 'flixster':
+            Wrow = np.asarray(db['W_users']).astype(np.float32).T
+            Wcol = np.asarray(db['W_movies']).astype(np.float32).T
+            u_features = Wrow
+            v_features = Wcol
+        elif dataset == 'douban':
+            Wrow = np.asarray(db['W_users']).astype(np.float32).T
+            u_features = Wrow
+            v_features = np.eye(num_items).astype(np.float32)
+        elif dataset == 'yahoo_music':
+            Wcol = np.asarray(db['W_tracks']).astype(np.float32).T
+            u_features = np.eye(num_users).astype(np.float32)
+            v_features = Wcol
+        return rating_mx_train, data_train, data_test, u_features, v_features
+    db.close()
     return rating_mx_train, data_train, data_test
 
 

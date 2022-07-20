@@ -46,13 +46,18 @@ class Transfer(object):
         heads = self.config['heads']
         layers = self.config['layers']
         input_channels = self.config['input_channels'] if input_embedding else 4
-        attention = True
+        attention = True if self.config['attention'] is None else self.config['attention']
+        edge_feature = True if self.config['edge_feature'] is None else self.config['edge_feature']
         model = GATIRec(input_channels=input_channels, EGAT_heads=heads, EGAT_output_channels=32, EGAT_layers=layers,
                         edge_classes=edge_classes, multiply_by=1, activation='elu', decoder_choice='mlp',
                         concat_nodes_feature=True, edge_embedding='cumsum', add_self_feature=True,
-                        input_embedding=input_embedding, attention=attention)
+                        input_embedding=input_embedding, attention=attention, edge_feature=edge_feature,
+                        h=2)
         checkpoint = torch.load(self.config['checkpoint_path'])
-        model.load_state_dict(checkpoint['state_dict'])
+        state_dict = checkpoint['state_dict']
+        if list(state_dict.keys())[0].startswith('module.'):
+            state_dict = {k[7:]:v for k,v in state_dict.items()}
+        model.load_state_dict(state_dict)
         if self.cuda:
             device_ids = [i for i in range(len(self.config['gpu_ids']))]
             if len(device_ids) > 1:
@@ -67,16 +72,20 @@ class Transfer(object):
         layers = self.config['layers']
         input_channels = self.config['input_channels'] if input_embedding else 4
         attention = True
+        edge_feature = True if self.config['edge_feature'] is None else self.config['edge_feature']
         checkpoint_epochs = [50, 60, 70, 80]
         models = []
         for epoch in checkpoint_epochs:
             model = GATIRec(input_channels=input_channels, EGAT_heads=heads, EGAT_output_channels=32, EGAT_layers=layers,
                             edge_classes=edge_classes, multiply_by=1, activation='elu', decoder_choice='mlp',
                             concat_nodes_feature=True, edge_embedding='cumsum', add_self_feature=True,
-                            input_embedding=input_embedding, attention=attention)
+                            input_embedding=input_embedding, attention=attention, edge_feature=edge_feature, h=2)
             checkpoint_path = os.path.join(self.config['ensemble_path'],'checkpoint_epoch0{}.pth.tar'.format(epoch))
             checkpoint = torch.load(checkpoint_path)
-            model.load_state_dict(checkpoint['state_dict'])
+            state_dict = checkpoint['state_dict']
+            if list(state_dict.keys())[0].startswith('module.'):
+                state_dict = {k[7:]:v for k,v in state_dict.items()}
+            model.load_state_dict(state_dict)
             models.append(model)
         models = torch.nn.ModuleList(models)
         return models.to(self.device)
@@ -87,20 +96,20 @@ class Transfer(object):
         one_hot_flag = not self.config['input_embedding']
         if dataset_name == 'flixster':
             dataset = Flixster(root=self.config['dataset_root'],
-                               max_neighbors=self.config['max_neighbors'], split='test',
+                               max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'], split='test',
                                one_hot_flag=one_hot_flag, transfer=True)
             self.model.set_multiply_by(self.config['flixster_multiply_by'])
         elif dataset_name == 'douban':
-            dataset = Douban(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'],
+            dataset = Douban(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
                              split='test', one_hot_flag=one_hot_flag)
             self.model.set_multiply_by(self.config['douban_multiply_by'])
         elif dataset_name == 'yahoo_music':
-            dataset = YahooMusic(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'],
+            dataset = YahooMusic(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
                                  split='test', one_hot_flag=one_hot_flag, transfer=True)
             self.model.set_multiply_by(self.config['yahoo_music_multiply_by'])
         else:
             dataset = DynamicMovieLens(root=self.config['dataset_root'], dataset=self.config['pretrain_dataset'],
-                                       max_neighbors=self.config['max_neighbors'],
+                                       max_neighbors=self.config['max_neighbors'], h=self.config['max_hops'],
                                        split='test', one_hot_flag=one_hot_flag)
             self.model.set_multiply_by(1)
         dataloader = DataLoader(dataset, batch_size=self.config['batch_size'], shuffle=False,
@@ -123,25 +132,27 @@ class Transfer(object):
 
     def ensemble_testing(self, dataset_name='ml_100k'):
         one_hot_flag = not self.config['input_embedding']
+        cluster_sample = True if self.config['cluster_sample'] is None else self.config['cluster_sample']
         if dataset_name == 'flixster':
             dataset = Flixster(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'],
-                               split='test', one_hot_flag=one_hot_flag, transfer=True)
+                               split='test', one_hot_flag=one_hot_flag, transfer=True, cluster_sample=cluster_sample)
             for i in range(4):
                 self.models[i].set_multiply_by(self.config['flixster_multiply_by'])
         elif dataset_name == 'douban':
             dataset = Douban(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'], split='test',
-                             one_hot_flag=one_hot_flag)
+                             one_hot_flag=one_hot_flag, cluster_sample=cluster_sample)
             for i in range(4):
                 self.models[i].set_multiply_by(self.config['douban_multiply_by'])
         elif dataset_name == 'yahoo_music':
             dataset = YahooMusic(root=self.config['dataset_root'], max_neighbors=self.config['max_neighbors'],
-                                 split='test', one_hot_flag=one_hot_flag, transfer=True)
+                                 split='test', one_hot_flag=one_hot_flag, transfer=True, cluster_sample=cluster_sample)
             for i in range(4):
                 self.models[i].set_multiply_by(self.config['yahoo_music_multiply_by'])
+                
         else:
             dataset = DynamicMovieLens(root=self.config['dataset_root'], dataset=self.config['pretrain_dataset'],
                                        max_neighbors=self.config['max_neighbors'], split='test',
-                                       one_hot_flag=one_hot_flag)
+                                       one_hot_flag=one_hot_flag, cluster_sample=cluster_sample)
             for i in range(4):
                 self.models[i].set_multiply_by(1)
         dataloader = DataLoader(dataset, batch_size=self.config['batch_size'], shuffle=False,

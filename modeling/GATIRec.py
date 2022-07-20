@@ -102,6 +102,22 @@ class ItemContext(nn.Module):
         assert x.dim() == 2
         return self.layerNorm(x@self.embedding_matrix)
 
+class SparseContext(nn.Module):
+    def __init__(self, embedding_dim, num_embeddings):
+        super(SparseContext, self).__init__()
+        self.embedding_matrix = nn.Parameter(torch.Tensor(num_embeddings, embedding_dim))
+        torch.nn.init.xavier_normal_(self.embedding_matrix)
+        self.linear = nn.Sequential(
+            nn.Linear(embedding_dim, embedding_dim),
+            nn.ReLU(True),
+            nn.Dropout(p=0.5),
+            nn.Linear(embedding_dim, embedding_dim)
+        )
+        self.layerNorm = nn.LayerNorm(normalized_shape=embedding_dim)
+
+    def forward(self, x):
+        assert x.dim() == 2
+        return self.linear(self.layerNorm(x@self.embedding_matrix))
 
 class NodeContext(nn.Module):
     def __init__(self, embedding_dim, item_num_embeddings, user_num_embeddings):
@@ -109,6 +125,29 @@ class NodeContext(nn.Module):
         assert isinstance(user_num_embeddings, list)
         self.itemContext = ItemContext(embedding_dim, item_num_embeddings)
         self.userContext = UserContext(embedding_dim, embedding_dim, user_num_embeddings)
+
+    def forward(self, u_features, v_features, u_num, v_num):
+        u_context = self.userContext(u_features)
+        v_context = self.itemContext(v_features)
+        u_num_arr = u_num.cpu().numpy()
+        v_num_arr = v_num.cpu().numpy()
+        u_idx = 0
+        v_idx = 0
+        result = []
+        for i in range(len(u_num_arr)):
+            result.append(u_context[u_idx:u_idx+u_num_arr[i], :])
+            result.append(v_context[v_idx:v_idx+v_num_arr[i], :])
+            u_idx += u_num_arr[i]
+            v_idx += v_num_arr[i]
+        return torch.cat(result, dim=0)
+
+class NodeContextv2(nn.Module):
+    def __init__(self, embedding_dim, item_num_embeddings, user_num_embeddings):
+        super(NodeContextv2, self).__init__()
+        # self.itemContext = ItemContext(embedding_dim, item_num_embeddings)
+        # self.userContext = ItemContext(embedding_dim, user_num_embeddings)
+        self.itemContext = SparseContext(embedding_dim, item_num_embeddings)
+        self.userContext = SparseContext(embedding_dim, user_num_embeddings)
 
     def forward(self, u_features, v_features, u_num, v_num):
         u_context = self.userContext(u_features)
@@ -145,7 +184,10 @@ class Encoder(nn.Module):
         self.nodeContext = None
         if use_feature:
             final_input_channels = input_channels + context_dim
-            self.nodeContext = NodeContext(context_dim, item_num_embeddings, user_num_embeddings)
+            if type(item_num_embeddings) == type(user_num_embeddings):
+                self.nodeContext = NodeContextv2(context_dim, item_num_embeddings, user_num_embeddings)
+            else:
+                self.nodeContext = NodeContext(context_dim, item_num_embeddings, user_num_embeddings)
 
         messagePassingLayers.append(GraphConv(in_channels=final_input_channels, out_channels=output_channels, heads=heads,
                                               edge_classes=edge_classes, activation=activation, concat=True,

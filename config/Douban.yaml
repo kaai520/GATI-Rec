@@ -15,10 +15,16 @@ input_embedding: True
 input_channels: 4
 edge_classes: 5
 heads: 4
-layers: 8
+layers: 4
 edge_embedding: cumsum
 attention: True
 edge_feature: True
+# Just for side information #
+use_feature: False
+context_dim: 4
+item_num_embeddings: 3000
+user_num_embeddings: 3000
+# Just for side information #
 is_cuda: True
 gpu_ids: [0]
 seed: 42
@@ -27,4 +33,4 @@ optim_mode: Adam #Adam
 lr_mode: poly #multistep
 lr_step: 40
 multistep_epochs: [20,20,20]
-log_prefix: layers=8
+log_prefix: train

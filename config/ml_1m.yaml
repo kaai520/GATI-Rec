@@ -4,17 +4,17 @@ weight_decay: 0.00005
 epochs: 80
 warmup_epochs: 0
 batch_size: 50
-train_num_workers: 8
-test_num_workers: 8
+train_num_workers: 16
+test_num_workers: 16
 dataset_root: raw_data
 dataset: ml_1m
-max_neighbors: 200 # 200
+max_neighbors: 200 # 350
 max_hops: 2
 cluster_sample: True
 input_embedding: True
 input_channels: 4
 edge_classes: 5
-heads: 2
+heads: 4
 layers: 4
 edge_embedding: cumsum
 attention: True
@@ -33,4 +33,4 @@ optim_mode: Adam #Adam
 lr_mode: poly #multistep
 lr_step: 40
 multistep_epochs: [20,20,20]
-log_prefix: h=2-no-content-nb-200
+log_prefix: no-content
